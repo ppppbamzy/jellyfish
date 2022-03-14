@@ -1492,7 +1492,9 @@ pub(crate) mod test {
 
         let mut p_minus_one = F::modulus_minus_one_div_two();
         p_minus_one.mul2();
-        println!("{}", p_minus_one);
+        let mut p = p_minus_one;
+        p.add_nocarry(&F::BigInt::from(1_u64));
+        println!("p = {}", p);
         println!("a = {}", circuit.witness(a).unwrap().into_repr());
         println!("b = {}", circuit.witness(b).unwrap().into_repr());
         println!("c = {}", circuit.witness(c).unwrap().into_repr());
