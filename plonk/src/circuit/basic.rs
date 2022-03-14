@@ -12,7 +12,7 @@ use crate::{
     errors::{CircuitError::*, PlonkError},
     MergeableCircuitType, PlonkType,
 };
-use ark_ff::{FftField, PrimeField};
+use ark_ff::{FftField, PrimeField, biginteger::BigInteger256};
 use ark_poly::{
     domain::Radix2EvaluationDomain, univariate::DensePolynomial, EvaluationDomain, UVPolynomial,
 };
@@ -1377,6 +1377,8 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use std::{println, print};
+
     use crate::{
         circuit::{Arithmetization, Circuit, PlonkCircuit},
         constants::compute_coset_representatives,
@@ -1386,7 +1388,7 @@ pub(crate) mod test {
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
-    use ark_ff::PrimeField;
+    use ark_ff::{PrimeField, BigInteger};
     use ark_poly::{domain::Radix2EvaluationDomain, univariate::DensePolynomial, EvaluationDomain};
     use ark_std::{test_rng, vec, vec::Vec};
 
@@ -1453,6 +1455,15 @@ pub(crate) mod test {
         let b = circuit.create_variable(F::from(1u32))?;
         let c = circuit.add(a, b)?;
 
+        // let mut p = F::modulus_minus_one_div_two();
+        // p.mul2();
+        // p.add_nocarry(&F::BigInt::from(1_u64));
+        // println!("{}", p);
+        // println!("a = {}", circuit.witness(a).unwrap().into_repr());
+        // println!("b = {}", circuit.witness(b).unwrap());
+        // println!("c = {}", circuit.witness(c).unwrap());
+        // println!("");
+
         // Check circuits.
         assert_eq!(circuit.witness(c)?, F::from(4u32));
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
@@ -1475,12 +1486,20 @@ pub(crate) mod test {
 
     fn test_sub_helper<F: PrimeField>() -> Result<(), PlonkError> {
         let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
-        let a = circuit.create_variable(F::from(3u32))?;
+        let a = circuit.create_variable(F::zero())?;
         let b = circuit.create_variable(F::from(1u32))?;
         let c = circuit.sub(a, b)?;
 
+        let mut p_minus_one = F::modulus_minus_one_div_two();
+        p_minus_one.mul2();
+        println!("{}", p_minus_one);
+        println!("a = {}", circuit.witness(a).unwrap().into_repr());
+        println!("b = {}", circuit.witness(b).unwrap().into_repr());
+        println!("c = {}", circuit.witness(c).unwrap().into_repr());
+        println!("");
+
         // Check circuits.
-        assert_eq!(circuit.witness(c)?, F::from(2u32));
+        assert_eq!(circuit.witness(c)?, F::from(p_minus_one));
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
         *circuit.witness_mut(c) = F::from(1u32);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
