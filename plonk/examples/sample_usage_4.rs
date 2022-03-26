@@ -4,10 +4,10 @@ use ark_ec::{
     ProjectiveCurve, TEModelParameters,
 };
 use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsParameters, Fr};
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, FftField};
 use ark_std::{rand::SeedableRng, UniformRand};
 use jf_plonk::{
-    circuit::{customized::ecc::Point, Arithmetization, Circuit, PlonkCircuit},
+    circuit::{customized::ecc::Point, Arithmetization, Circuit, PlonkCircuit, Variable},
     errors::PlonkError,
     proof_system::{PlonkKzgSnark, Snark},
     transcript::StandardTranscript,
@@ -24,6 +24,13 @@ fn main() -> Result<(), PlonkError> {
     println!("new circuit: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
+    let x = <EdwardsParameters as ModelParameters>::BaseField::from(42_u64);
+    let x_var = circuit.create_variable(x)?;
+    let mut circuit = proof_of_quintic_equ_root(circuit, x_var)?;
+
+    println!("after adding the quintic equ root: ");
+    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+
     let x = Fr::rand(&mut rng);
     let G = EdwardsAffine::prime_subgroup_generator();
     let X = G.mul(x).into_affine();
@@ -31,6 +38,12 @@ fn main() -> Result<(), PlonkError> {
 
     println!("after add ec part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+    
+    /////////////////////
+    // 后处理
+    /////////////////////
+
+    circuit.finalize_for_arithmetization()?;
 
     /////////////////////
     // 协议部分
@@ -70,16 +83,6 @@ fn main() -> Result<(), PlonkError> {
     Ok(())
 }
 
-// This function build the PoE circuit.
-//
-// We write the code with generics so that is can be adapted to
-// multiple curves.
-// Specifically, the PoE is associated with
-// - an embedded curve with param `EmbedCurve` that defined twisted-edwards
-//   parameters for a curve
-// - a pairing engine
-// - the native field F for the prove system
-#[allow(non_snake_case)]
 fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
     mut circuit: PlonkCircuit<EmbedCurve::BaseField>,
     x: EmbedCurve::ScalarField,
@@ -121,8 +124,31 @@ where
         .check_circuit_satisfiability(&[X_jf.get_x(), X_jf.get_y()])
         .is_ok());
 
-    // And we are done!
-    circuit.finalize_for_arithmetization()?;
+    Ok(circuit)
+}
+
+fn proof_of_quintic_equ_root<F>(
+    mut circuit: PlonkCircuit<F>,
+    x_var: Variable,
+) -> Result<PlonkCircuit<F>, PlonkError>
+where
+    F: PrimeField
+{
+    let x2_var = circuit.mul(x_var, x_var)?;
+    let x3_var = circuit.mul(x2_var, x_var)?;
+    let x4_var = circuit.mul(x3_var, x_var)?;
+    let x5_var = circuit.mul(x4_var, x_var)?;
+
+    let x2_times_2_var = circuit.mul_constant(x2_var, &F::from(2_u64))?;
+    let x3_times_3_var = circuit.mul_constant(x3_var, &F::from(3_u64))?;
+    let x4_times_4_var = circuit.mul_constant(x4_var, &F::from(4_u64))?;
+    let x5_times_5_var = circuit.mul_constant(x5_var, &F::from(5_u64))?;
+
+    let acc_var = x_var;
+    let acc_var = circuit.add(acc_var, x2_times_2_var)?;
+    let acc_var = circuit.add(acc_var, x3_times_3_var)?;
+    let acc_var = circuit.add(acc_var, x4_times_4_var)?;
+    let acc_var = circuit.add(acc_var, x5_times_5_var)?;
 
     Ok(circuit)
 }
