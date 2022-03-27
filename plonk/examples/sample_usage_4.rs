@@ -26,7 +26,8 @@ fn main() -> Result<(), PlonkError> {
 
     let x = <EdwardsParameters as ModelParameters>::BaseField::from(42_u64);
     let x_var = circuit.create_variable(x)?;
-    let mut circuit = proof_of_quintic_equ_root(circuit, x_var)?;
+    proof_of_quintic_equ_root(&mut circuit, x_var)?;
+    // let mut circuit = proof_of_quintic_equ_root(circuit, x_var)?;
 
     println!("after adding the quintic equ root: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
@@ -34,7 +35,8 @@ fn main() -> Result<(), PlonkError> {
     let x = Fr::rand(&mut rng);
     let G = EdwardsAffine::prime_subgroup_generator();
     let X = G.mul(x).into_affine();
-    let mut circuit = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(circuit, x, X)?;
+    proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, X)?;
+    // let mut circuit = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(circuit, x, X)?;
 
     println!("after add ec part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
@@ -83,11 +85,13 @@ fn main() -> Result<(), PlonkError> {
     Ok(())
 }
 
+#[allow(non_snake_case)]
 fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
-    mut circuit: PlonkCircuit<EmbedCurve::BaseField>,
+    circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
     x: EmbedCurve::ScalarField,
     X: TEAffine<EmbedCurve>,
-) -> Result<PlonkCircuit<EmbedCurve::BaseField>, PlonkError>
+) -> Result<(), PlonkError>
+// ) -> Result<PlonkCircuit<EmbedCurve::BaseField>, PlonkError>
 where
     EmbedCurve: TEModelParameters + Clone,
     <EmbedCurve as ModelParameters>::BaseField: PrimeField,
@@ -124,13 +128,15 @@ where
         .check_circuit_satisfiability(&[X_jf.get_x(), X_jf.get_y()])
         .is_ok());
 
-    Ok(circuit)
+    Ok(())
+    // Ok(circuit)
 }
 
 fn proof_of_quintic_equ_root<F>(
-    mut circuit: PlonkCircuit<F>,
+    circuit: &mut PlonkCircuit<F>,
     x_var: Variable,
-) -> Result<PlonkCircuit<F>, PlonkError>
+) -> Result<(), PlonkError>
+// ) -> Result<PlonkCircuit<F>, PlonkError>
 where
     F: PrimeField
 {
@@ -150,5 +156,6 @@ where
     let acc_var = circuit.add(acc_var, x4_times_4_var)?;
     let acc_var = circuit.add(acc_var, x5_times_5_var)?;
 
-    Ok(circuit)
+    Ok(())
+    // Ok(circuit)
 }
