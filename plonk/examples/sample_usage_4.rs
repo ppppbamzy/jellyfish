@@ -1,39 +1,37 @@
 use ark_bls12_381::Bls12_381;
 use ark_ec::{
     twisted_edwards_extended::GroupAffine as TEAffine, AffineCurve, ModelParameters, PairingEngine,
-    ProjectiveCurve, TEModelParameters,
+    TEModelParameters,
 };
-use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsParameters, Fr};
-use ark_ff::{PrimeField, FftField};
-use ark_std::{rand::SeedableRng, UniformRand};
+use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsParameters, Fq};
+use ark_ff::{PrimeField};
+use ark_std::{rand::SeedableRng};
 use jf_plonk::{
     circuit::{customized::{ecc::{Point, PointVariable}, rescue::RescueGadget}, Arithmetization, Circuit, PlonkCircuit, Variable},
     errors::PlonkError,
     proof_system::{PlonkKzgSnark, Snark},
     transcript::StandardTranscript,
 };
-use jf_utils::fr_to_fq;
 use rand_chacha::ChaCha20Rng;
 
 // The following example proves knowledge of exponent.
 #[allow(non_snake_case)]
 fn main() -> Result<(), PlonkError> {
     let mut rng = ChaCha20Rng::from_seed([0u8; 32]);
-    let mut circuit = PlonkCircuit::<<EdwardsParameters as ModelParameters>::BaseField>::new_turbo_plonk();
+    let mut circuit = PlonkCircuit::new_turbo_plonk();
 
     println!("new circuit: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
-    let x = <EdwardsParameters as ModelParameters>::BaseField::from(42_u64);
+    let x = Fq::from(42_u64);
     let x_var = circuit.create_variable(x)?;
-    proof_of_quintic_equ_root(&mut circuit, x_var)?;
+    let k_var = proof_of_quintic_equ_root(&mut circuit, x_var)?;
 
     println!("after adding the quintic equ root: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
-    let x = Fr::rand(&mut rng);
     let G = EdwardsAffine::prime_subgroup_generator();
-    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, G)?;
+    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x_var, G)?;
 
     println!("after add ec part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
@@ -47,6 +45,7 @@ fn main() -> Result<(), PlonkError> {
     // 标出公开变量、算术化
     /////////////////////
 
+    circuit.set_variable_public(k_var)?;
     circuit.set_variable_public(hash_out_var)?;
     circuit.finalize_for_arithmetization()?;
 
@@ -91,7 +90,7 @@ fn main() -> Result<(), PlonkError> {
 #[allow(non_snake_case)]
 fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
     circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
-    x: EmbedCurve::ScalarField,
+    x_var: Variable,
     G: TEAffine<EmbedCurve>,
 ) -> Result<PointVariable, PlonkError>
 where
@@ -99,15 +98,6 @@ where
     <EmbedCurve as ModelParameters>::BaseField: PrimeField,
     PairingCurve: PairingEngine,
 {
-
-    // Step 2:
-    // now we create variables for each input to the circuit.
-
-    // First variable is x which is an field element over P::ScalarField.
-    // We will need to lift it to P::BaseField.
-    let x_fq = fr_to_fq::<_, EmbedCurve>(&x);
-    let x_var = circuit.create_variable(x_fq)?;
-
     // The next variable is a public constant: generator `G`.
     // We need to convert the point to Jellyfish's own `Point` struct.
     let G_jf: Point<EmbedCurve::BaseField> = G.into();
@@ -123,7 +113,7 @@ where
 fn proof_of_quintic_equ_root<F>(
     circuit: &mut PlonkCircuit<F>,
     x_var: Variable,
-) -> Result<(), PlonkError>
+) -> Result<Variable, PlonkError>
 where
     F: PrimeField
 {
@@ -143,9 +133,10 @@ where
     let acc_var = circuit.add(acc_var, x4_times_4_var)?;
     let acc_var = circuit.add(acc_var, x5_times_5_var)?;
 
-    Ok(())
+    Ok(acc_var)
 }
 
+#[allow(non_snake_case)]
 fn proof_of_point_hashing<F>(
     circuit: &mut PlonkCircuit<F>,
     X_var: PointVariable,

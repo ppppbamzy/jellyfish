@@ -12,7 +12,7 @@ use crate::{
     errors::{CircuitError::*, PlonkError},
     MergeableCircuitType, PlonkType,
 };
-use ark_ff::{FftField, PrimeField, biginteger::BigInteger256};
+use ark_ff::{FftField, PrimeField};
 use ark_poly::{
     domain::Radix2EvaluationDomain, univariate::DensePolynomial, EvaluationDomain, UVPolynomial,
 };
@@ -1377,7 +1377,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::{println, print};
+    use std::{println};
 
     use crate::{
         circuit::{Arithmetization, Circuit, PlonkCircuit},
