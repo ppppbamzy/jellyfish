@@ -7,7 +7,7 @@ use ark_ed_on_bls12_381::{EdwardsAffine, EdwardsParameters, Fr};
 use ark_ff::{PrimeField, FftField};
 use ark_std::{rand::SeedableRng, UniformRand};
 use jf_plonk::{
-    circuit::{customized::ecc::Point, Arithmetization, Circuit, PlonkCircuit, Variable},
+    circuit::{customized::{ecc::{Point, PointVariable}, rescue::RescueGadget}, Arithmetization, Circuit, PlonkCircuit, Variable},
     errors::PlonkError,
     proof_system::{PlonkKzgSnark, Snark},
     transcript::StandardTranscript,
@@ -35,9 +35,14 @@ fn main() -> Result<(), PlonkError> {
     let G = EdwardsAffine::prime_subgroup_generator();
     let X = G.mul(x).into_affine();
     proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, X)?;
-    // let mut circuit = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(circuit, x, X)?;
 
     println!("after add ec part: ");
+    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+
+    let X_var = circuit.create_point_variable(X.into())?;
+    proof_of_point_hashing(&mut circuit, X_var)?;
+
+    println!("after hashing part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
     
     /////////////////////
@@ -152,6 +157,22 @@ where
     let acc_var = circuit.add(acc_var, x3_times_3_var)?;
     let acc_var = circuit.add(acc_var, x4_times_4_var)?;
     let acc_var = circuit.add(acc_var, x5_times_5_var)?;
+
+    Ok(())
+}
+
+fn proof_of_point_hashing<F>(
+    circuit: &mut PlonkCircuit<F>,
+    X_var: PointVariable,
+) -> Result<(), PlonkError>
+where
+    F: PrimeField + jf_rescue::RescueParameter
+{
+    let x_var = X_var.get_x();
+    let y_var = X_var.get_y();
+    let z = circuit.zero();
+
+    let hash_out_var = circuit.rescue_sponge_no_padding(&[x_var, y_var, z], 1)?;
 
     Ok(())
 }
