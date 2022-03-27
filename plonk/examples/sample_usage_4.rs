@@ -33,8 +33,7 @@ fn main() -> Result<(), PlonkError> {
 
     let x = Fr::rand(&mut rng);
     let G = EdwardsAffine::prime_subgroup_generator();
-    let X = G.mul(x).into_affine();
-    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, X)?;
+    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, G)?;
 
     println!("after add ec part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
@@ -93,16 +92,13 @@ fn main() -> Result<(), PlonkError> {
 fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
     circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
     x: EmbedCurve::ScalarField,
-    X: TEAffine<EmbedCurve>,
+    G: TEAffine<EmbedCurve>,
 ) -> Result<PointVariable, PlonkError>
 where
     EmbedCurve: TEModelParameters + Clone,
     <EmbedCurve as ModelParameters>::BaseField: PrimeField,
     PairingCurve: PairingEngine,
 {
-    // Let's check that the inputs are indeed correct before we build a circuit.
-    let G = TEAffine::<EmbedCurve>::prime_subgroup_generator();
-    assert_eq!(X, G.mul(x), "the inputs are incorrect: X != xG");
 
     // Step 2:
     // now we create variables for each input to the circuit.
@@ -117,21 +113,11 @@ where
     let G_jf: Point<EmbedCurve::BaseField> = G.into();
     let G_var = circuit.create_constant_point_variable(G_jf)?;
 
-    // The last variable is a public variable `X`.
-    let X_jf: Point<EmbedCurve::BaseField> = X.into();
-    let X_var = circuit.create_public_point_variable(X_jf)?;
-
     // Step 3:
     // Connect the wires.
     let X_var_computed = circuit.variable_base_scalar_mul::<EmbedCurve>(x_var, &G_var)?;
-    circuit.point_equal_gate(&X_var_computed, &X_var)?;
 
-    // Sanity check: the circuit must be satisfied.
-    assert!(circuit
-        .check_circuit_satisfiability(&[X_jf.get_x(), X_jf.get_y()])
-        .is_ok());
-
-    Ok(X_var)
+    Ok(X_var_computed)
 }
 
 fn proof_of_quintic_equ_root<F>(
