@@ -18,28 +18,39 @@ use rand_chacha::ChaCha20Rng;
 #[allow(non_snake_case)]
 fn main() -> Result<(), PlonkError> {
     let mut rng = ChaCha20Rng::from_seed([0u8; 32]);
+
+    // 新建一个电路
     let mut circuit = PlonkCircuit::new_turbo_plonk();
 
-    println!("new circuit: ");
-    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+    // println!("new circuit: ");
+    // for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
     let x = Fq::from(42_u64);
     let x_var = circuit.create_variable(x)?;
-    let k_var = proof_of_quintic_equ_root(&mut circuit, x_var)?;
+    // 加入一个计算 5 次方程 5x^5 + 4x^4 + ... + x = k 的电路组件
+    // 这里以**新创建的变量** x 作为输入
+    // 以结果变量 k 作为输出
+    let k_var = compose_proof_of_quintic_equ_root(&mut circuit, x_var)?;
 
-    println!("after adding the quintic equ root: ");
-    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+    // println!("after adding the quintic equ root: ");
+    // for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
     let G = EdwardsAffine::prime_subgroup_generator();
-    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x_var, G)?;
+    // 加入一个计算点的数乘的电路组件
+    // 这里以**上一个电路组件的输入变量** x 和**新的常量** G 作为输入
+    // 以结果变量 X 作为输出
+    let X_var = compose_proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x_var, G)?;
 
-    println!("after add ec part: ");
-    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+    // println!("after add ec part: ");
+    // for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
-    let hash_out_var = proof_of_point_hashing(&mut circuit, X_var)?;
+    // 加入一个对一个点做哈希的电路组件
+    // 这里以**上一个电路组件的输出变量** X 作为输入
+    // 以结果变量 hash_out 作为输出
+    let hash_out_var = compose_proof_of_point_hashing(&mut circuit, X_var)?;
 
-    println!("after hashing part: ");
-    for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
+    // println!("after hashing part: ");
+    // for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
     
     /////////////////////
     // 标出公开变量、算术化
@@ -87,30 +98,7 @@ fn main() -> Result<(), PlonkError> {
     Ok(())
 }
 
-#[allow(non_snake_case)]
-fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
-    circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
-    x_var: Variable,
-    G: TEAffine<EmbedCurve>,
-) -> Result<PointVariable, PlonkError>
-where
-    EmbedCurve: TEModelParameters + Clone,
-    <EmbedCurve as ModelParameters>::BaseField: PrimeField,
-    PairingCurve: PairingEngine,
-{
-    // The next variable is a public constant: generator `G`.
-    // We need to convert the point to Jellyfish's own `Point` struct.
-    let G_jf: Point<EmbedCurve::BaseField> = G.into();
-    let G_var = circuit.create_constant_point_variable(G_jf)?;
-
-    // Step 3:
-    // Connect the wires.
-    let X_var_computed = circuit.variable_base_scalar_mul::<EmbedCurve>(x_var, &G_var)?;
-
-    Ok(X_var_computed)
-}
-
-fn proof_of_quintic_equ_root<F>(
+fn compose_proof_of_quintic_equ_root<F>(
     circuit: &mut PlonkCircuit<F>,
     x_var: Variable,
 ) -> Result<Variable, PlonkError>
@@ -137,7 +125,30 @@ where
 }
 
 #[allow(non_snake_case)]
-fn proof_of_point_hashing<F>(
+fn compose_proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
+    circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
+    x_var: Variable,
+    G: TEAffine<EmbedCurve>,
+) -> Result<PointVariable, PlonkError>
+where
+    EmbedCurve: TEModelParameters + Clone,
+    <EmbedCurve as ModelParameters>::BaseField: PrimeField,
+    PairingCurve: PairingEngine,
+{
+    // The next variable is a public constant: generator `G`.
+    // We need to convert the point to Jellyfish's own `Point` struct.
+    let G_jf: Point<EmbedCurve::BaseField> = G.into();
+    let G_var = circuit.create_constant_point_variable(G_jf)?;
+
+    // Step 3:
+    // Connect the wires.
+    let X_var_computed = circuit.variable_base_scalar_mul::<EmbedCurve>(x_var, &G_var)?;
+
+    Ok(X_var_computed)
+}
+
+#[allow(non_snake_case)]
+fn compose_proof_of_point_hashing<F>(
     circuit: &mut PlonkCircuit<F>,
     X_var: PointVariable,
 ) -> Result<Variable, PlonkError>
