@@ -34,21 +34,21 @@ fn main() -> Result<(), PlonkError> {
     let x = Fr::rand(&mut rng);
     let G = EdwardsAffine::prime_subgroup_generator();
     let X = G.mul(x).into_affine();
-    proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, X)?;
+    let X_var = proof_of_exponent_circuit::<EdwardsParameters, Bls12_381>(&mut circuit, x, X)?;
 
     println!("after add ec part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
 
-    let X_var = circuit.create_point_variable(X.into())?;
-    proof_of_point_hashing(&mut circuit, X_var)?;
+    let hash_out_var = proof_of_point_hashing(&mut circuit, X_var)?;
 
     println!("after hashing part: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
     
     /////////////////////
-    // 后处理
+    // 标出公开变量、算术化
     /////////////////////
 
+    circuit.set_variable_public(hash_out_var)?;
     circuit.finalize_for_arithmetization()?;
 
     /////////////////////
@@ -94,8 +94,7 @@ fn proof_of_exponent_circuit<EmbedCurve, PairingCurve>(
     circuit: &mut PlonkCircuit<EmbedCurve::BaseField>,
     x: EmbedCurve::ScalarField,
     X: TEAffine<EmbedCurve>,
-) -> Result<(), PlonkError>
-// ) -> Result<PlonkCircuit<EmbedCurve::BaseField>, PlonkError>
+) -> Result<PointVariable, PlonkError>
 where
     EmbedCurve: TEModelParameters + Clone,
     <EmbedCurve as ModelParameters>::BaseField: PrimeField,
@@ -132,7 +131,7 @@ where
         .check_circuit_satisfiability(&[X_jf.get_x(), X_jf.get_y()])
         .is_ok());
 
-    Ok(())
+    Ok(X_var)
 }
 
 fn proof_of_quintic_equ_root<F>(
@@ -164,7 +163,7 @@ where
 fn proof_of_point_hashing<F>(
     circuit: &mut PlonkCircuit<F>,
     X_var: PointVariable,
-) -> Result<(), PlonkError>
+) -> Result<Variable, PlonkError>
 where
     F: PrimeField + jf_rescue::RescueParameter
 {
@@ -174,5 +173,5 @@ where
 
     let hash_out_var = circuit.rescue_sponge_no_padding(&[x_var, y_var, z], 1)?;
 
-    Ok(())
+    Ok(hash_out_var[0])
 }
