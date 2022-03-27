@@ -27,7 +27,6 @@ fn main() -> Result<(), PlonkError> {
     let x = <EdwardsParameters as ModelParameters>::BaseField::from(42_u64);
     let x_var = circuit.create_variable(x)?;
     proof_of_quintic_equ_root(&mut circuit, x_var)?;
-    // let mut circuit = proof_of_quintic_equ_root(circuit, x_var)?;
 
     println!("after adding the quintic equ root: ");
     for v in 0..circuit.num_vars() { println!("{}: {}", v, circuit.witness(v).unwrap()); }
@@ -129,14 +128,12 @@ where
         .is_ok());
 
     Ok(())
-    // Ok(circuit)
 }
 
 fn proof_of_quintic_equ_root<F>(
     circuit: &mut PlonkCircuit<F>,
     x_var: Variable,
 ) -> Result<(), PlonkError>
-// ) -> Result<PlonkCircuit<F>, PlonkError>
 where
     F: PrimeField
 {
@@ -157,5 +154,4 @@ where
     let acc_var = circuit.add(acc_var, x5_times_5_var)?;
 
     Ok(())
-    // Ok(circuit)
 }
